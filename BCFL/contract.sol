@@ -1,11 +1,10 @@
-
 contract StoreVar {
 
     string public ownerSig;
     string public modelWeightIPFSHash;
 
-    event UpdateEvent(string _ownerSig,string modelWeightIPFSHash);
-    event GetInfo(string _ownerSig, string modelWeightIPFSHash);
+    event UpdateEvent(string ownerSig,string modelWeightIPFSHash);
+    event GetInfo(string ownerSig, string modelWeightIPFSHash);
 
     function setFLUpdate(string memory _ownerSig,
                         string memory _weightIPFS) public{

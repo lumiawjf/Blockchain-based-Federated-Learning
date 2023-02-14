@@ -18,6 +18,7 @@ from copy import deepcopy
 import sys
 import pprint
 import json
+import os
 
 ### Digital Signature ###
 import Crypto
@@ -36,13 +37,8 @@ import solcx
 import os
 import argparse
 
-HOST = '127.0.0.1'
-PORT = 8000
-server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
-server.bind((HOST, PORT))
-server.listen(10)
 
+#parser argparse
 parser = argparse.ArgumentParser(description='smart contract')
 parser.add_argument('-dc', '--deploy_contract', type=bool, default=True, help="First time to deploy contract.")
 args = parser.parse_args()
@@ -69,7 +65,7 @@ def compile_source_file(file_path):
     solcx.set_solc_version('0.8.9')
     with open(file_path, 'r') as f:
         source = f.read()
-        print(source)
+        # print(source)
     return solcx.compile_source(source)
 
 def deploy_contract(w3, abi, bytecode):
@@ -80,6 +76,7 @@ def deploy_contract(w3, abi, bytecode):
 
 
 """Validation function"""
+#LeNet5 Co Po Co Po FC FC FC
 class Net(nn.Module):
     def __init__(self) -> None:
         super(Net, self).__init__()
@@ -108,18 +105,18 @@ def bytes_to_ndarray(tensor):
     ndarray_deserialized = np.load(bytes_io, allow_pickle=False)
     return cast(np.ndarray, ndarray_deserialized)
 
+#validate certain weight on the model. 
 def validation(weight):
     device = torch.device("cpu")
     model_ae = Net().to(device)
     init_weight = model_ae.state_dict()
     for i,layer in enumerate(init_weight.keys()):
         init_weight[layer] = torch.from_numpy(parameters_to_weights(weight['tensors'])[i])
-        print(i,layer)
+        # print(i,layer)
 
     model_ae.load_state_dict(init_weight)
     model_ae.eval()
-    transform = transforms.Compose(
-    [transforms.ToTensor(),
+    transform = transforms.Compose( [transforms.ToTensor(),
      transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
 
     batch_size = 16
@@ -127,9 +124,7 @@ def validation(weight):
                                            download=True, transform=transform)
     testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size,
                                              shuffle=False, num_workers=2)
-
-    classes = ('plane', 'car', 'bird', 'cat',
-               'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+    classes = ('plane', 'car', 'bird', 'cat','deer', 'dog', 'frog', 'horse', 'ship', 'truck')
     
     correct = 0
     total = 0
@@ -141,7 +136,9 @@ def validation(weight):
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
 
-    print(f'Accuracy of the network on the 10000 test images: {100 * correct // total} %')
+    print(f'\nAccuracy of the network on the 10000 test images: {100 * correct / total} %\n')
+    with open("accuracy.txt", 'a+') as f:  
+        f.write(f"{100 * correct / total}\n")
     return  str(100 * correct // total) 
 
 
@@ -163,31 +160,34 @@ def ipfs_cat(hash_ipfs):
 def aggregated(checked):
     weight=[]
     IPFS=[]
-    path = 'hash.txt'
+    path = '/workspaces/Blockchain-based-Federated-Learning/BCFL/hash.txt'
+    
     with open(path) as f:
         IPFS = f.readlines()
     weight.append(ipfs_cat(IPFS[0].replace("\n", "")))
     weight.append(ipfs_cat(IPFS[1].replace("\n", "")))
+    
     device = torch.device("cpu")
     model_ae = Net().to(device)
     init_weight = model_ae.state_dict()
-
+    #assert 命令 true则无事发生 false则报错
     assert weight[0]['tensors'] != weight[1]['tensors'], "two weights are the same."
-    for i in range(np.array(weight[0]['tensors']).shape[0]):    
-        
-        if (np.array(weight[0]['tensors'][i])==(np.array(weight[0]['tensors'][i]) +np.array(weight[1]['tensors'][i]))/2).all():
+    
+    for i in range(np.array(weight[0]['tensors'],dtype=object).shape[0]):    
+        we0 = np.array(weight[0]['tensors'][i],dtype=object)
+        we1 = np.array(weight[1]['tensors'][i],dtype=object)
+        if (we0==(we0+we1)/2).all():
+            cp = deepcopy(list(map(float, weight[0]['tensors'][i])))
+            weight[0]['tensors'][i] = ( (we0 +we1) / 2).astype(int).tolist()
+            print(we0.shape)
+            print(we1.shape)
+            print(weight[0]['tensors'][i].shape)
 
-        cp = deepcopy(list(map(float, weight[0]['tensors'][i])))
-        weight[0]['tensors'][i] = ((np.array(weight[0]['tensors'][i]) +np.array(weight[1]['tensors'][i]))/2).astype(int).tolist()
-        print(np.array(weight[0]['tensors'][i]).shape)
-        print(np.array(weight[1]['tensors'][i]).shape)
-
-    path = './weight'
-    f = open(path, 'w+')
-    f.write(str(jsons.dumps(weight[0])))
-    f.close()
+    path = '/workspaces/Blockchain-based-Federated-Learning/BCFL/weight'
+    with open(path, 'w+') as f:
+        f.write(str(jsons.dumps(weight[0])))
     api = ipfshttpclient.connect('/ip4/127.0.0.1/tcp/5001/http')
-    res = api.add('./weight')
+    res = api.add(path)
     return res['Hash']
 
 if __name__ == '__main__':
@@ -196,45 +196,37 @@ if __name__ == '__main__':
     checked = []
     user = {}  # Dictionary{addr:name}
     clients = set()
-    task_owner_path = 'task_owner_key/'
+
 
     """
     RSA Public key and private key
     """
     # RSA private key
-    if not 'private.pem' in os.listdir(task_owner_path):
-        key = RSA.generate(2048)
-        file = 'task_owner_key/private.pem'
-        open(file, 'a').close()
-        privateKey = key.export_key()
-        with open("task_owner_key/private.pem", "wb") as f:
-            f.write(privateKey)
-    else:
-        with open("task_owner_key/private.pem", "rb") as f:
-            private_key = RSA.importKey(f.read())
+    with open("/workspaces/Blockchain-based-Federated-Learning/BCFL/task_owner_key/private.pem", "rb") as f:
+        private_key = RSA.importKey(f.read())
 
-    # RSA Public key
-    if not 'public.pem' in os.listdir(task_owner_path):
-        file = 'task_owner_key/public.pem'
-        open(file, 'a').close()
-        publicKey = key.publickey().export_key()
-        with open("task_owner_key/public.pem", "wb") as f:
-            f.write(publicKey)
-    else:
-        with open("task_owner_key/public.pem", "rb") as f:
-            public_key = RSA.importKey(f.read())
+    # # RSA Public key
+    # if not 'public.pem' in os.listdir(task_owner_path):
+    #     file = 'task_owner_key/public.pem'
+    #     open(file, 'a').close()
+    #     publicKey = key.publickey().export_key()
+    #     with open("task_owner_key/public.pem", "wb") as f:
+    #         f.write(publicKey)
+    # else:
+    #     with open(task_owner_path+"public.pem", "rb") as f:
+    #         public_key = RSA.importKey(f.read())
 
     """
     Web3 & Smart contract
     """
     # Set up Web3.py instance 
-    w3 = Web3(Web3.HTTPProvider("http://140.113.110.106:8547", request_kwargs={'timeout': 60}))
+    w3 = Web3(Web3.HTTPProvider("http://localhost:8547", request_kwargs={'timeout': 60}))
 
     # Set pre-funded account as sender
     w3.eth.default_account = w3.eth.accounts[0]
     print(f'Using miner 1 address = {w3.eth.default_account}')
     chain_id = 8787
-    contract_path = "/home/sylvia/Documents/110_Blockchain/bcfl/Flower/contract.sol"
+    contract_path = "/workspaces/Blockchain-based-Federated-Learning/BCFL/contract.sol"
 
     # Compile contract, get contract ID & interface
     compiled_sol = compile_source_file(contract_path)
@@ -258,85 +250,62 @@ if __name__ == '__main__':
 
         # tx_receipt : the transaction is mined (contained execution status[success/fail] & emitted event logs)
         tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-        print(f'Contract deployed successful !\ntx_receipt = \n')
-        pprint.pprint(dict(tx_receipt))
+        # print(f'Contract deployed successful !\ntx_receipt = \n')
+        # pprint.pprint(dict(tx_receipt))
         address = w3.eth.get_transaction_receipt(tx_hash)['contractAddress']
         print(f'Deployed to address : {address}.\n')
-    
-
+    i = 0
+    HOST = '127.0.0.1'
+    PORT = 8000
     while True:
+        i = i + 1
+        print("%d epoch" % i)
+
         try:
+            #set server
+            server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            server.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
+            server.bind((HOST, PORT))
+            server.listen(10)
             conn, addr = server.accept()
             clients.add(conn)
-            print("\n\n\n\naddr"+str(addr))
-            print("\n\n\n\nconn"+str(conn))
+            print("\naddr"+str(addr))
+            # print("\nconn"+str(conn))
 
-            if not addr in user: 
-                # key:addr, value: received msg from client
+            if not addr in user:    # as long as the client isn't in user list, to perform below:
+                #received msg from client
                 user[addr] = str(conn.recv(1024), encoding='utf-8') 
                 clientMessage = user[addr]
                 info_json = jsons.loads(clientMessage)
+                
                 # Local Model IPFS hash
                 LM_IPFS = info_json['LM_IPFS']
-                # Global Model IPFS hash
-                GM_VerID = info_json['GM_VerID']
                 Client_Num = info_json['Client_Num'] 
                 print('Client Local Model IPFS hash is:', LM_IPFS)
-                print('Client Global Model IPFS hash is:', GM_VerID)
 
-                # Checking version  
-                Newest_VerID = "1.0" 
-                if float(GM_VerID) < float(Newest_VerID):
-                    serverMessage = 'It is not the newest Global Model Version ID,Please fetch the newest version :' + Newest_VerID
-                else: 
-                    # Validation phase
-                    weight = ipfs_cat(LM_IPFS)
-                    accuracy = validation(weight)
-                    if int(accuracy)>=65: 
-                        serverMessage = 'Validated!Accuracy = '+accuracy+ '%'
-                        checked.append(Client_Num)
-                    else:
-                        serverMessage = 'Fail!Accuracy = '+accuracy+ '%'
-                        
+                # Validation phase
+                weight = ipfs_cat(LM_IPFS)
+                accuracy = validation(weight)
+                serverMessage = 'Validated!Accuracy = '+accuracy+ '%'
+                checked.append(Client_Num)
                 done.append(Client_Num)
 
                 if len(done) == 2:
-                    # [ Only one client passes the validation]
-                    if len(checked)==1: 
-                        IPFS=[]
-                        path = 'hash.txt'
-                        with open(path) as f:
-                            IPFS = f.readlines()
-
-                        if checked[0]=="8080":
-                            LM_IPFS = IPFS[0].replace("\n", "")
-                        else :
-                            LM_IPFS = IPFS[1].replace("\n", "")
-                        print(LM_IPFS)
-                        serverMessage = 'Next Global Model hash:'+ LM_IPFS
-
-                    # [ Nobody passes the validation ]
-                    elif len(checked)==0:
-                        path = 'lastest_GMhash.txt'
-                        f = open(path, 'r')
-                        LM_IPFS = f.read()
-                        f.close()
-                        serverMessage = 'Next Global Model hash:'+ LM_IPFS
                     
-                    # [ >1 clients pass the validation, need to aggregate global model weight]
-                    else:
-                        print("Aggregating...")
-                        LM_IPFS = aggregated(checked)
-                        serverMessage = 'Next Global Model hash:'+ LM_IPFS
+                    print("Aggregating...")
+                    LM_IPFS = aggregated(checked)
+                    accuracy2 = validation(weight)
+                    print("accuracy after aggregating is: %s" % accuracy2)
+                    serverMessage = 'Next Global Model hash:'+ LM_IPFS
 
-                    print('serverMessage: ', serverMessage)
+                    # print('serverMessage: ', serverMessage)
                     info_json['serverMessage'] = serverMessage
                     info_json['done_Num'] = len(done)
 
                     # Build transaction and wait to be mined
                     # Fetch contract by contractAddress & abi
                     address = w3.eth.get_transaction_receipt(tx_hash)['contractAddress']
-                    print(f"Fetching transaction instance by contract address : {address}...\n ")
+                    # print(f"Fetching transaction instance by contract address : {address}...\n ")
                     store_contract = w3.eth.contract(address=address, abi=abi)
                     
                     # Sign the transaction hash with task owner's private key 
@@ -345,27 +314,27 @@ if __name__ == '__main__':
 
                     hasher = SHA256.new(pkcs5_pad(LM_IPFS))
                     signature = signer.sign(hasher)
-                    signature_str = signature.decode('utf-8', 'ignore')
-                    print(f"Signature : {signature}, can be verified by task owner's public key, transaction hash & signature")
-                    print(f"Fetched contract instance succesfully :{store_contract}\nStart sending transaction...\n ")
-
+                    signature_str = signature.decode('utf-16', 'ignore')
+                    # print(f"Signature : {signature}, can be verified by task owner's public key, transaction hash & signature")
+                    # print(f"Fetched contract instance succesfully :{store_contract}\nStart sending transaction...\n ")
+                    # print(f"signature_str: {signature_str}")
                     new_transaction = store_contract.functions.setFLUpdate(signature_str, LM_IPFS).transact()
                     new_tx_receipt = w3.eth.wait_for_transaction_receipt(new_transaction)
-                    print("Transaction receipt mined:")
-                    pprint.pprint(dict(new_tx_receipt))
-                    print("\nWas transaction successful?")
-                    pprint.pprint(new_tx_receipt["status"])
+                    # print("Transaction receipt mined:")
+                    # pprint.pprint(dict(new_tx_receipt))
+                    # print("\nWas transaction successful?")
+                    # pprint.pprint(new_tx_receipt["status"])
 
                     returned_var = store_contract.functions.getFLUpdate().call()
-                    print(f'Returned information  = {returned_var}')
-
+                    # print(f'Returned information  = {returned_var}')
+                    
                     serverMessage = jsons.dumps(info_json)                    
-                    path = './latest_GMhash.txt'
+                    path = '/workspaces/Blockchain-based-Federated-Learning/BCFL/latest_GMhash.txt'
                     f = open(path, 'w')
                     f.write(LM_IPFS)
                     f.close()
                 
-                    path = './hash.txt'
+                    path = '/workspaces/Blockchain-based-Federated-Learning/BCFL/hash.txt'
                     f = open(path, 'w')
                     f.close()
                     
@@ -388,6 +357,8 @@ if __name__ == '__main__':
                 info_json['done_Num'] = '0'
                 serverMessage = jsons.dumps(info_json)
                 conn.sendall(serverMessage.encode())
+
+            server.close()
 
         except ConnectionResetError:
             logging.warning('Someone meets error.')

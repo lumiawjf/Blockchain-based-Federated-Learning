@@ -21,7 +21,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 import jsons
 import ipfshttpclient
-
+import os
 from flwr.common import (
     EvaluateIns,
     EvaluateRes,
@@ -143,13 +143,16 @@ class FedAvg(Strategy):
         """Initialize global model parameters."""
         initial_parameters = self.initial_parameters
         # Hsunchi & Syl modified
-        with open('/home/sylvia/Documents/110_Blockchain/bcfl/Flower/latest_GMhash.txt','r') as lst:
-            hash_name = lst.read()   
-        print(hash_name)
-        api = ipfshttpclient.connect('/ip4/127.0.0.1/tcp/5001/http') 
-        line = str(api.cat(hash_name))
-        line = line.replace('\'', '\"')
-        initial_parameters = jsons.loads(line[2:len(line)-1],Parameters)
+        if not 'latest_GMhash.txt' in os.listdir('.'):
+            initial_parameters = self.initial_parameters
+        else:
+            with open('./latest_GMhash.txt','r') as lst:
+                hash_name = lst.read()   
+            print(hash_name)
+            api = ipfshttpclient.connect('/ip4/127.0.0.1/tcp/5001/http') 
+            line = str(api.cat(hash_name))
+            line = line.replace('\'', '\"')
+            initial_parameters = jsons.loads(line[2:len(line)-1],Parameters)
         self.initial_parameters = None  # Don't keep initial parameters in memory
         return initial_parameters
 

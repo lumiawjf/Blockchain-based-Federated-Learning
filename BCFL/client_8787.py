@@ -1,6 +1,5 @@
 import warnings
 from collections import OrderedDict
-
 import flwr as fl
 import torch
 import torch.nn as nn
@@ -10,11 +9,9 @@ from torchvision.datasets import CIFAR10
 from torchvision.transforms import Compose, Normalize, ToTensor
 from tqdm import tqdm
 
-
 # #############################################################################
 # 1. Regular PyTorch pipeline: nn.Module, train, test, and DataLoader
 # #############################################################################
-
 warnings.filterwarnings("ignore", category=UserWarning)
 # DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 DEVICE = torch.device("cpu")
@@ -22,7 +19,6 @@ DEVICE = torch.device("cpu")
 
 class Net(nn.Module):
     """Model (simple CNN adapted from 'PyTorch: A 60 Minute Blitz')"""
-
     def __init__(self) -> None:
         super(Net, self).__init__()
         self.conv1 = nn.Conv2d(3, 6, 5)
@@ -71,13 +67,29 @@ def load_data():
     trf = Compose([ToTensor(), Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
     trainset = CIFAR10("./data", train=True, download=True, transform=trf)
     testset = CIFAR10("./data", train=False, download=True, transform=trf)
-    return DataLoader(trainset, batch_size=32, shuffle=True), DataLoader(testset)
+    # 按ID对训练集合的拆分
+    id = 1
+    all_range = list(range(len(trainset)))
+    data_len = int(len(trainset) / 2)
+    indices = all_range[id * data_len: (id + 1) * data_len]
+    print(str(indices[0]),"-",str(indices[-1]))
+    # 生成一个数据加载器
+    train_loader = torch.utils.data.DataLoader(
+        # 制定父集合
+        trainset,
+        # batch_size每个batch加载多少个样本(默认: 1)
+        batch_size=32,
+        # 指定子集合
+        # sampler定义从数据集中提取样本的策略
+        sampler=torch.utils.data.sampler.SubsetRandomSampler(indices)
+    )
+    
+    return train_loader, DataLoader(testset)
 
 
 # #############################################################################
 # 2. Federation of the pipeline with Flower
 # #############################################################################
-
 # Load model and data (simple CNN, CIFAR-10)
 net = Net().to(DEVICE)
 trainloader, testloader = load_data()
@@ -106,6 +118,5 @@ class FlowerClient(fl.client.NumPyClient):
         loss, accuracy = test(net, testloader)
         return loss, len(testloader.dataset), {"accuracy": accuracy}
 
-
 # Start Flower client
-fl.client.start_numpy_client("[::]:8787", client=FlowerClient())
+fl.client.start_numpy_client("0.0.0.0:8787", client=FlowerClient())

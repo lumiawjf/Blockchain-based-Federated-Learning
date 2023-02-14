@@ -67,7 +67,24 @@ def load_data():
     trf = Compose([ToTensor(), Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
     trainset = CIFAR10("./data", train=True, download=True, transform=trf)
     testset = CIFAR10("./data", train=False, download=True, transform=trf)
-    return DataLoader(trainset, batch_size=32, shuffle=True), DataLoader(testset)
+    # 按ID对训练集合的拆分
+    id = 0
+    all_range = list(range(len(trainset)))
+    data_len = int(len(trainset) / 2)
+    indices = all_range[id * data_len: (id + 1) * data_len]
+    print(str(indices[0]),"-",str(indices[-1]))
+    # 生成一个数据加载器
+    train_loader = torch.utils.data.DataLoader(
+        # 制定父集合
+        trainset,
+        # batch_size每个batch加载多少个样本(默认: 1)
+        batch_size=32,
+        # 指定子集合
+        # sampler定义从数据集中提取样本的策略
+        sampler=torch.utils.data.sampler.SubsetRandomSampler(indices)
+    )
+    
+    return train_loader, DataLoader(testset)
 
 
 # #############################################################################
@@ -101,6 +118,5 @@ class FlowerClient(fl.client.NumPyClient):
         loss, accuracy = test(net, testloader)
         return loss, len(testloader.dataset), {"accuracy": accuracy}
 
-
 # Start the flower client
-fl.client.start_numpy_client("[::]:8081", client=FlowerClient())
+fl.client.start_numpy_client("0.0.0.0:8081", client=FlowerClient())

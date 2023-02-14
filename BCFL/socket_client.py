@@ -2,6 +2,7 @@ import socket
 import jsons
 import argparse
 import time
+import os
 
 HOST = '127.0.0.1'
 PORT = 8000
@@ -18,7 +19,7 @@ if __name__ == '__main__':
 
     with open(path) as f:
         IPFS = f.readlines()
-    if args.port=="8080":
+    if args.port=="8081":
         LM_IPFS = IPFS[0].replace("\n", "")
     else :
         LM_IPFS = IPFS[1].replace("\n", "")
@@ -58,3 +59,8 @@ if __name__ == '__main__':
             break
 
     client.close()
+
+    while True:
+        time.sleep(2)
+        if os.path.getsize("/workspaces/Blockchain-based-Federated-Learning/BCFL/hash.txt")==0 :
+            break
